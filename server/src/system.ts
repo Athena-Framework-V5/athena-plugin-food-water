@@ -1,6 +1,6 @@
 import * as alt from 'alt-server';
-import { Athena } from '@AthenaServer/api/athena';
-import { ATHENA_EVENTS_PLAYER } from '@AthenaShared/enums/athenaEvents';
+import * as Athena from '@AthenaServer/api';
+
 import { SYSTEM_EVENTS } from '@AthenaShared/enums/system';
 import { VITALS_CONFIG } from '../../shared/src/config';
 import { VITAL_NAMES } from '../../shared/enums';
@@ -15,7 +15,8 @@ class InternalFunctions {
      * @returns Nothing.
      */
     static handlePing(player: alt.Player) {
-        if (!player || !player.valid || !player.data) return;
+        const data = Athena.document.character.get(player);
+        if (!player || !player.valid || !data) return;
 
         if (syncTimes[player.id] && Date.now() < syncTimes[player.id]) {
             return;
@@ -23,11 +24,11 @@ class InternalFunctions {
 
         syncTimes[player.id] = Date.now() + VITALS_CONFIG.TIME_BETWEEN_UPDATES_IN_MS;
 
-        if (player.data.isDead) {
-            player.data[VITAL_NAMES.FOOD] = 100;
-            player.data[VITAL_NAMES.WATER] = 100;
-            Athena.player.emit.meta(player, VITAL_NAMES.FOOD, player.data[VITAL_NAMES.FOOD]);
-            Athena.player.emit.meta(player, VITAL_NAMES.WATER, player.data[VITAL_NAMES.WATER]);
+        if (data.isDead) {
+            data[VITAL_NAMES.FOOD] = 100;
+            data[VITAL_NAMES.WATER] = 100;
+            Athena.player.emit.meta(player, VITAL_NAMES.FOOD, data[VITAL_NAMES.FOOD]);
+            Athena.player.emit.meta(player, VITAL_NAMES.WATER, data[VITAL_NAMES.WATER]);
             return;
         }
 
@@ -48,7 +49,7 @@ export class VitalsSystem {
         alt.onClient(SYSTEM_EVENTS.PLAYER_TICK, InternalFunctions.handlePing);
 
         // This is called when the player selects a character
-        Athena.events.player.on(ATHENA_EVENTS_PLAYER.SELECTED_CHARACTER, (player) => {
+        Athena.player.events.on('selected-character', (player) => {
             VitalsSystem.forceUpdateVital(player, VITAL_NAMES.FOOD);
             VitalsSystem.forceUpdateVital(player, VITAL_NAMES.WATER);
         });
@@ -61,11 +62,14 @@ export class VitalsSystem {
      * @param {VITAL_NAMES} vitalName - The name of the vital to update.
      */
     static forceUpdateVital(player: alt.Player, vitalName: VITAL_NAMES) {
-        if (!player.data[vitalName]) {
-            Athena.state.set(player, vitalName, 100);
+        const data = Athena.document.character.get(player);
+        if (typeof data === 'undefined') return;
+
+        if (!data[vitalName]) {
+            Athena.document.character.set(player, vitalName, 100);
         }
 
-        Athena.player.emit.meta(player, vitalName, player.data[vitalName]);
+        Athena.player.emit.meta(player, vitalName, data[vitalName]);
     }
 
     /**
@@ -79,6 +83,9 @@ export class VitalsSystem {
      * @memberof VitalsSystem
      */
     static adjustVital(player: alt.Player, vitalName: VITAL_NAMES, value: number, isExact = false) {
+        const data = Athena.document.character.get(player);
+        if (typeof data === 'undefined') return;
+
         if (typeof value === 'string') {
             value = parseFloat(value);
         }
@@ -86,11 +93,11 @@ export class VitalsSystem {
         let oldVitalValue: number;
 
         if (!isExact) {
-            if (player.data[vitalName] === undefined || player.data[vitalName] === null) {
-                player.data[vitalName] = 100;
+            if (data[vitalName] === undefined || data[vitalName] === null) {
+                data[vitalName] = 100;
             }
 
-            oldVitalValue = player.data[vitalName];
+            oldVitalValue = data[vitalName];
             oldVitalValue += value;
 
             if (oldVitalValue < 0) {
@@ -104,8 +111,8 @@ export class VitalsSystem {
             oldVitalValue = Math.abs(value);
         }
 
-        if (oldVitalValue !== player.data[vitalName]) {
-            Athena.state.set(player, vitalName, oldVitalValue);
+        if (oldVitalValue !== data[vitalName]) {
+            Athena.document.character.set(player, vitalName, oldVitalValue);
         }
 
         Athena.player.emit.meta(player, vitalName, oldVitalValue);
@@ -121,7 +128,7 @@ export class VitalsSystem {
      * @return {*}
      * @memberof VitalsSystem
      */
-    static normalizeVital(value: number) {
+    static normalizeVital(value: number): number {
         if (value > 100) {
             value = 100;
         }

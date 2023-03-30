@@ -1,9 +1,9 @@
 import * as alt from 'alt-server';
+import * as Athena from '@AthenaServer/api';
+
 import EFFECT from '@AthenaShared/enums/effects';
-import { Item } from '@AthenaShared/interfaces/item';
 import IAttachable from '@AthenaShared/interfaces/iAttachable';
 import { ANIMATION_FLAGS } from '@AthenaShared/flags/animationFlags';
-import { Athena } from '@AthenaServer/api/athena';
 import { VITAL_NAMES } from '../../shared/enums';
 import { VitalsSystem } from './system';
 
@@ -13,12 +13,23 @@ export class InternalFunctions {
      * An animation or a sound is also played dependent on the data passed inside of the item itself.
      *
      * @param player - alt.Player - The player who is receiving the item.
-     * @param {Item} item - Item - The item that was consumed.
      * @param {VITAL_NAMES} vitalsName - The name of the vital that was changed.
      */
-    static handleVitalsChange(player: alt.Player, item: Item, vitalsName: VITAL_NAMES) {
+    static async handleVitalsChange(
+        player: alt.Player,
+        slot: number,
+        type: 'inventory' | 'toolbar',
+        vitalsName: VITAL_NAMES,
+    ) {
+        const data = Athena.document.character.get(player);
+        if (typeof data === 'undefined') return;
+
+        let item = null;
+        item =
+            type === 'toolbar'
+                ? Athena.player.toolbar.getAt(player, slot)
+                : Athena.player.inventory.getAt(player, slot);
         VitalsSystem.adjustVital(player, vitalsName, item.data.amount);
-        Athena.player.inventory.notify(player, `+${item.data.amount} ${vitalsName}`);
 
         if (item.data.sound) {
             Athena.player.emit.sound3D(player, item.data.sound, player);
@@ -27,7 +38,7 @@ export class InternalFunctions {
         if (vitalsName === VITAL_NAMES.FOOD) {
             const attachedObject: IAttachable = {
                 model: 'prop_cs_burger_01',
-                bone: 57005,
+                bone: 71,
                 pos: { x: 0.15, y: -0.02, z: -0.05 },
                 rot: { x: -180, y: -150, z: -95 },
             };
@@ -40,12 +51,14 @@ export class InternalFunctions {
                 ANIMATION_FLAGS.UPPERBODY_ONLY | ANIMATION_FLAGS.ENABLE_PLAYER_CONTROL,
                 6000,
             );
+
+            VitalsSystem.adjustVital(player, VITAL_NAMES.FOOD, item.data.amount);
         }
 
         if (vitalsName === VITAL_NAMES.WATER) {
             const attachedObject: IAttachable = {
                 model: 'prop_beer_bottle',
-                bone: 57005,
+                bone: 71,
                 pos: { x: 0.13, y: -0.12, z: -0.05 },
                 rot: { x: 100, y: -220, z: 180 },
             };
@@ -58,7 +71,12 @@ export class InternalFunctions {
                 ANIMATION_FLAGS.UPPERBODY_ONLY | ANIMATION_FLAGS.ENABLE_PLAYER_CONTROL,
                 5000,
             );
+
+            VitalsSystem.adjustVital(player, VITAL_NAMES.WATER, item.data.amount);
         }
+        type === 'toolbar'
+            ? await Athena.player.toolbar.sub(player, { dbName: item.dbName, quantity: 1, data: item.data })
+            : await Athena.player.inventory.sub(player, { dbName: item.dbName, quantity: 1 });
     }
 }
 
@@ -67,20 +85,18 @@ export class VitalsEffects {
      * It adds an effect to the item that will change the player's vitals when the item is consumed.
      */
     static init() {
-        Athena.systems.effects.add(EFFECT.EFFECT_FOOD, (player: alt.Player, item: Item) => {
-            if (!item || !item.data || !item.data.amount) {
-                return;
-            }
+        Athena.systems.inventory.effects.add(
+            EFFECT.EFFECT_FOOD,
+            (player: alt.Player, slot: number, type: 'inventory' | 'toolbar') => {
+                InternalFunctions.handleVitalsChange(player, slot, type, VITAL_NAMES.FOOD);
+            },
+        );
 
-            InternalFunctions.handleVitalsChange(player, item, VITAL_NAMES.FOOD);
-        });
-
-        Athena.systems.effects.add(EFFECT.EFFECT_WATER, (player: alt.Player, item: Item) => {
-            if (!item || !item.data || !item.data.amount) {
-                return;
-            }
-
-            InternalFunctions.handleVitalsChange(player, item, VITAL_NAMES.WATER);
-        });
+        Athena.systems.inventory.effects.add(
+            EFFECT.EFFECT_WATER,
+            (player: alt.Player, slot: number, type: 'inventory' | 'toolbar') => {
+                InternalFunctions.handleVitalsChange(player, slot, type, VITAL_NAMES.WATER);
+            },
+        );
     }
 }
