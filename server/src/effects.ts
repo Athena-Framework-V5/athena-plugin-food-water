@@ -1,11 +1,11 @@
 import * as alt from 'alt-server';
-import * as Athena from '@AthenaServer/api';
+import * as Athena from '@AthenaServer/api/index.js';
 
-import EFFECT from '@AthenaShared/enums/effects';
-import IAttachable from '@AthenaShared/interfaces/iAttachable';
-import { ANIMATION_FLAGS } from '@AthenaShared/flags/animationFlags';
-import { VITAL_NAMES } from '../../shared/enums';
-import { VitalsSystem } from './system';
+import EFFECT from '@AthenaShared/enums/effects.js';
+import IAttachable from '@AthenaShared/interfaces/iAttachable.js';
+import { ANIMATION_FLAGS } from '@AthenaShared/flags/animationFlags.js';
+import { VITAL_NAMES } from '../../shared/enums.js';
+import { VitalsSystem } from './system.js';
 
 export class InternalFunctions {
     /**
